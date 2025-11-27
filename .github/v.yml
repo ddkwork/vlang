@@ -1,0 +1,63 @@
+name: Build and Package V on Windows
+
+on:
+  workflow_dispatch: # 主要用于手动触发
+  release:
+    types: [ published ]
+
+jobs:
+  build-and-package:
+    name: Build and Package V
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        include:
+          - name: "V with TCC"
+            flags: ""
+          - name: "V Production Build"
+            flags: "-prod"
+    
+    steps:
+      - name: Checkout current repo
+        uses: actions/checkout@v4
+
+      - name: Clone and build V
+        run: |
+          echo "Building: ${{ matrix.name }}"
+          git clone --depth=1 https://github.com/vlang/v v-source-${{ strategy.job-index }}
+          cd v-source-${{ strategy.job-index }}
+          .\make.bat
+          .\v.exe version
+          
+          # 使用指定标志重新编译V（如果提供了flags）
+          if ("${{ matrix.flags }}" -ne "") {
+            .\v.exe ${{ matrix.flags }} -o v${{ strategy.job-index }}.exe cmd/v
+            move v${{ strategy.job-index }}.exe v.exe -Force
+          }
+
+      - name: Create comprehensive package
+        run: |
+          $sourceDir = "v-source-${{ strategy.job-index }}"
+          $packageName = "v-${{ strategy.job-index }}-windows-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+          
+          # 直接压缩克隆后的目录
+          Compress-Archive -Path "$sourceDir\*" -DestinationPath "$packageName.zip"
+          echo "PACKAGE_NAME=$packageName.zip" >> $env:GITHUB_ENV
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v-package-${{ strategy.job-index }}
+          path: ${{ env.PACKAGE_NAME }}
+          retention-days: 30
+
+      - name: Display package summary
+        run: |
+          echo "=== Package Summary ==="
+          echo "Package: ${{ env.PACKAGE_NAME }}"
+          echo "Build type: ${{ matrix.name }}"
+          echo "Contents:"
+          dir ${{ env.SOURCE_DIR }} -Recurse -Name
+          echo "Package size:"
+          dir ${{ env.PACKAGE_NAME }}
