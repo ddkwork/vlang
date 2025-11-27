@@ -1,9 +1,9 @@
 name: Build and Package V on Windows
 
 on:
-  workflow_dispatch: # 主要用于手动触发
-  release:
-    types: [ published ]
+  push:
+    branches:
+      - master
 
 jobs:
   build-and-package:
